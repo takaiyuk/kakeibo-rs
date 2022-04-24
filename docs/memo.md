@@ -1,0 +1,3 @@
+- [Error - reqwest json response to get](https://www.reddit.com/r/rust/comments/gg98m0/error_reqwest_json_response_to_get/)
+- [conversations.history method - Slack API](https://api.slack.com/methods/conversations.history)
+- [reqwest/form.rs at master · seanmonstar/reqwest · GitHub](https://github.com/seanmonstar/reqwest/blob/master/examples/form.rs)
