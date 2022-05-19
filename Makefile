@@ -1,4 +1,4 @@
-.PHONY: check build run clean
+.PHONY: check build run release clean
 
 check:
 	cargo c
@@ -8,6 +8,9 @@ build:
 
 run:
 	cargo r
+
+release:
+	cargo build --release
 
 clean:
 	cargo clean
