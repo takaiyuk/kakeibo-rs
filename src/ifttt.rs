@@ -52,3 +52,24 @@ impl IFTTTAPI {
         }
     }
 }
+
+#[cfg(test)]
+mod test_ifttt_api_params {
+    use super::*;
+
+    const EVENT_NAME: &str = "channel_id";
+    const TOKEN: &str = "token";
+
+    fn set_up_env() {
+        env::set_var("IFTTT_EVENT_NAME", EVENT_NAME);
+        env::set_var("IFTTT_WEBHOOK_TOKEN", TOKEN);
+    }
+
+    #[test]
+    fn build() {
+        set_up_env();
+        let params = IFTTTAPIParams::build();
+        assert_eq!(params.event_name, EVENT_NAME);
+        assert_eq!(params.token, TOKEN);
+    }
+}
