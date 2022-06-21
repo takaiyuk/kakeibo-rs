@@ -25,12 +25,8 @@ impl SlackAPIParams {
         SlackAPIParams {
             base_url: SLACK_BASE_URL.to_string(),
             method: SLACK_API_METHOD.to_string(),
-            channel: env::var("SLACK_CHANNEL_ID")
-                .expect("$SLACK_CHANNEL_ID is not set")
-                .to_string(),
-            token: env::var("SLACK_TOKEN")
-                .expect("$SLACK_TOKEN is not set")
-                .to_string(),
+            channel: env::var("SLACK_CHANNEL_ID").expect("$SLACK_CHANNEL_ID is not set"),
+            token: env::var("SLACK_TOKEN").expect("$SLACK_TOKEN is not set"),
         }
     }
 }
@@ -51,8 +47,7 @@ impl SlackAPI {
             EXCLUDE_MINUTES,
         );
         let threshold = fiter_options.get_threshold();
-        let filtered_slack_messages = self.filter(slack_messages, threshold);
-        filtered_slack_messages
+        self.filter(slack_messages, threshold)
     }
 
     fn get_conversations_history(&self) -> Vec<SlackMessage> {
@@ -64,8 +59,7 @@ impl SlackAPI {
                 return vec![];
             }
         };
-        let slack_messages = self.build_slack_messages(&res);
-        slack_messages
+        self.build_slack_messages(&res)
     }
 
     fn post(&self) -> Result<reqwest::blocking::Response, reqwest::Error> {
@@ -76,15 +70,14 @@ impl SlackAPI {
         let slack_header_auth = format!("Bearer {}", self.params.token);
 
         let slack_client = reqwest::blocking::Client::new();
-        let res = slack_client
+        slack_client
             .post(slack_url)
             .header("Authorization", slack_header_auth)
-            .send();
-        res
+            .send()
     }
 
     fn json(&self, res: reqwest::blocking::Response) -> serde_json::Value {
-        return res.json().expect("failed to deserialize json");
+        res.json().expect("failed to deserialize json")
     }
 
     fn build_slack_messages(&self, res: &serde_json::Value) -> Vec<SlackMessage> {
@@ -141,12 +134,11 @@ impl FilterSlackMessageOptions {
         let exclude_days = self.exclude_days;
         let exclude_hours = self.exclude_hours;
         let exclude_minutes = self.exclude_minutes;
-        let threshold = (local_dt
+        (local_dt
             - Duration::days(exclude_days)
             - Duration::hours(exclude_hours)
             - Duration::minutes(exclude_minutes))
-        .timestamp() as f64;
-        threshold
+        .timestamp() as f64
     }
 }
 
@@ -199,8 +191,8 @@ mod test_slack_api {
                 name: "正常系",
                 base_url: SLACK_BASE_URL.to_string(),
                 method: SLACK_API_METHOD.to_string(),
-                channel: env::var("SLACK_CHANNEL_ID").unwrap().to_string(),
-                token: env::var("SLACK_TOKEN").unwrap().to_string(),
+                channel: env::var("SLACK_CHANNEL_ID").unwrap(),
+                token: env::var("SLACK_TOKEN").unwrap(),
                 expected: "invalid_auth".to_string(),
             },
             Fixture {
@@ -250,7 +242,7 @@ mod test_slack_api {
                 Ok(res) => slack_api.json(res),
                 Err(e) => panic!("{} {}", fixture.name, e),
             };
-            assert_eq!(res["ok"].as_bool().unwrap(), false, "{}", fixture.name);
+            assert!(!res["ok"].as_bool().unwrap(), "{}", fixture.name);
             assert_eq!(res["error"], fixture.expected.clone(), "{}", fixture.name);
         }
     }
