@@ -1,7 +1,13 @@
-.PHONY: check test build run release clean
+.PHONY: check fmt fix test build run release clean
 
 check:
 	cargo c
+
+fmt:
+	cargo fmt
+
+fix:
+	cargo fix
 
 test:
 	cargo t
