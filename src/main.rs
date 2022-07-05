@@ -1,11 +1,11 @@
-use dotenv::dotenv;
+use anyhow::Result;
+
 use kakeibo_rs::ifttt::IFTTTAPIParams;
 use kakeibo_rs::ifttt::IFTTTAPI;
 use kakeibo_rs::slack::SlackAPI;
 use kakeibo_rs::slack::SlackAPIParams;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    dotenv().ok();
+fn main() -> Result<()> {
     let slack_messages = SlackAPI {
         params: SlackAPIParams::build(),
     }
