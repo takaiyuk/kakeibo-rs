@@ -1,4 +1,4 @@
-.PHONY: check fmt fix test build run release clean
+.PHONY: check fmt fix test coverage build run release clean doc
 
 check:
 	cargo c
@@ -11,6 +11,9 @@ fix:
 
 test:
 	cargo t
+
+coverage:
+	cargo tarpaulin
 
 build:
 	cargo b
