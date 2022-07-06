@@ -1,6 +1,5 @@
 use anyhow::Result;
 use chrono::{DateTime, Duration, Local};
-use std::env;
 
 const SLACK_BASE_URL: &str = "https://slack.com/api";
 const SLACK_API_METHOD: &str = "conversations.history";
@@ -8,7 +7,7 @@ const EXCLUDE_DAYS: i64 = 0;
 const EXCLUDE_HOURS: i64 = 0;
 const EXCLUDE_MINUTES: i64 = 10;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct SlackMessage {
     pub timestamp: f64,
     pub text: String,
@@ -22,33 +21,35 @@ pub struct SlackAPIParams {
 }
 
 impl SlackAPIParams {
-    pub fn build() -> SlackAPIParams {
-        SlackAPIParams {
+    pub fn new(slack_channel_id: String, slack_token: String) -> Self {
+        Self {
             base_url: SLACK_BASE_URL.to_string(),
             method: SLACK_API_METHOD.to_string(),
-            channel: env::var("SLACK_CHANNEL_ID").expect("$SLACK_CHANNEL_ID is not set"),
-            token: env::var("SLACK_TOKEN").expect("$SLACK_TOKEN is not set"),
+            channel: slack_channel_id,
+            token: slack_token,
         }
     }
 }
 
 pub struct SlackAPI {
     pub params: SlackAPIParams,
+    threshold: f64,
 }
 
 impl SlackAPI {
-    pub fn extract(&self) -> Vec<SlackMessage> {
+    pub fn new(params: SlackAPIParams) -> Self {
         let local_dt = Local::now();
-
-        let slack_messages = self.get_conversations_history();
-        let fiter_options = FilterSlackMessageOptions::build(
-            local_dt,
-            EXCLUDE_DAYS,
-            EXCLUDE_HOURS,
-            EXCLUDE_MINUTES,
-        );
+        let fiter_options =
+            FilterSlackMessageOptions::new(local_dt, EXCLUDE_DAYS, EXCLUDE_HOURS, EXCLUDE_MINUTES);
         let threshold = fiter_options.get_threshold();
-        self.filter(slack_messages, threshold)
+        Self { params, threshold }
+    }
+
+    pub fn extract(&self) -> Vec<SlackMessage> {
+        let slack_messages = self.get_conversations_history();
+        let mut slack_messages = self.filter(slack_messages, self.threshold);
+        let slack_messages = self.reverse(&mut slack_messages);
+        slack_messages.clone()
     }
 
     fn get_conversations_history(&self) -> Vec<SlackMessage> {
@@ -82,29 +83,31 @@ impl SlackAPI {
     }
 
     fn build_slack_messages(&self, res: &serde_json::Value) -> Vec<SlackMessage> {
-        let mut slack_messages = Vec::new();
-        for i in (0..100).rev() {
-            let message = &res["messages"][i];
-            let ts = message["ts"].as_str().unwrap();
-            let text = message["text"].as_str().unwrap();
-            let slack_message = SlackMessage {
-                timestamp: ts.parse::<f64>().unwrap(),
-                text: text.to_string(),
-            };
-            slack_messages.push(slack_message);
-        }
-        slack_messages
+        res["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|message| {
+                let timestamp = message["ts"].as_str().unwrap();
+                let text = message["text"].as_str().unwrap();
+                SlackMessage {
+                    timestamp: timestamp.parse::<f64>().unwrap(),
+                    text: text.to_string(),
+                }
+            })
+            .collect()
     }
 
     fn filter(&self, slack_messages: Vec<SlackMessage>, threshold: f64) -> Vec<SlackMessage> {
-        let mut filtered_slack_messages = Vec::new();
-        for m in slack_messages {
-            if m.timestamp > threshold {
-                println!("message to be posted: {},{}", m.timestamp, m.text);
-                filtered_slack_messages.push(m);
-            }
-        }
-        filtered_slack_messages
+        slack_messages
+            .into_iter()
+            .filter(|m| m.timestamp > threshold)
+            .collect()
+    }
+
+    fn reverse<'a>(&self, slack_messages: &'a mut Vec<SlackMessage>) -> &'a mut Vec<SlackMessage> {
+        slack_messages.reverse();
+        slack_messages
     }
 }
 
@@ -116,13 +119,13 @@ struct FilterSlackMessageOptions {
 }
 
 impl FilterSlackMessageOptions {
-    fn build(
+    fn new(
         local_dt: DateTime<Local>,
         exclude_days: i64,
         exclude_hours: i64,
         exclude_minutes: i64,
-    ) -> FilterSlackMessageOptions {
-        FilterSlackMessageOptions {
+    ) -> Self {
+        Self {
             local_dt,
             exclude_days,
             exclude_hours,
@@ -144,41 +147,36 @@ impl FilterSlackMessageOptions {
 }
 
 #[cfg(test)]
-mod test_slack_api_params {
+mod test {
     use super::*;
 
     const CHANNEL_ID: &str = "channel_id";
     const TOKEN: &str = "token";
-
-    fn set_up_dummy_env() {
-        env::set_var("SLACK_CHANNEL_ID", CHANNEL_ID);
-        env::set_var("SLACK_TOKEN", TOKEN);
-    }
+    const EXCLUDE_DAYS: i64 = 1;
+    const EXCLUDE_HOURS: i64 = 2;
+    const EXCLUDE_MINUTES: i64 = 3;
 
     #[test]
-    fn build() {
-        set_up_dummy_env();
-        let params = SlackAPIParams::build();
+    fn slack_api_params_new() {
+        let params = SlackAPIParams::new(CHANNEL_ID.to_string(), TOKEN.to_string());
         assert_eq!(params.method, SLACK_API_METHOD);
         assert_eq!(params.channel, CHANNEL_ID);
         assert_eq!(params.token, TOKEN);
     }
-}
 
-#[cfg(test)]
-mod test_slack_api {
-    use super::*;
-
-    const CHANNEL_ID: &str = "channel_id";
-    const TOKEN: &str = "token";
-
-    fn set_up_dummy_env() {
-        env::set_var("SLACK_CHANNEL_ID", CHANNEL_ID);
-        env::set_var("SLACK_TOKEN", TOKEN);
+    #[test]
+    fn slack_api_new() {
+        let params = SlackAPIParams::new(CHANNEL_ID.to_string(), TOKEN.to_string());
+        let slack_api = SlackAPI::new(params);
+        assert_eq!(slack_api.params.base_url, SLACK_BASE_URL);
+        assert_eq!(slack_api.params.method, SLACK_API_METHOD);
+        assert_eq!(slack_api.params.channel, CHANNEL_ID);
+        assert_eq!(slack_api.params.token, TOKEN);
     }
 
     #[test]
-    fn post() {
+    // FIXME: post の mock を作成する必要があるかも
+    fn slack_api_post() {
         struct Fixture {
             name: &'static str,
             base_url: String,
@@ -192,8 +190,8 @@ mod test_slack_api {
                 name: "正常系",
                 base_url: SLACK_BASE_URL.to_string(),
                 method: SLACK_API_METHOD.to_string(),
-                channel: env::var("SLACK_CHANNEL_ID").unwrap(),
-                token: env::var("SLACK_TOKEN").unwrap(),
+                channel: CHANNEL_ID.to_string(),
+                token: TOKEN.to_string(),
                 expected: "invalid_auth".to_string(),
             },
             Fixture {
@@ -230,14 +228,12 @@ mod test_slack_api {
             },
         ];
         for fixture in fixtures.iter() {
-            let slack_api = SlackAPI {
-                params: SlackAPIParams {
-                    base_url: fixture.base_url.clone(),
-                    method: fixture.method.clone(),
-                    channel: fixture.channel.clone(),
-                    token: fixture.token.clone(),
-                },
-            };
+            let slack_api = SlackAPI::new(SlackAPIParams {
+                base_url: fixture.base_url.clone(),
+                method: fixture.method.clone(),
+                channel: fixture.channel.clone(),
+                token: fixture.token.clone(),
+            });
             let res = slack_api.post();
             let res = match res {
                 Ok(res) => slack_api.json(res),
@@ -249,44 +245,123 @@ mod test_slack_api {
     }
 
     #[test]
-    fn filter() {
-        set_up_dummy_env();
+    fn test_build_slack_messages() {
+        let slack_api = SlackAPI::new(SlackAPIParams {
+            base_url: SLACK_BASE_URL.to_string(),
+            method: SLACK_API_METHOD.to_string(),
+            channel: CHANNEL_ID.to_string(),
+            token: TOKEN.to_string(),
+        });
+        let res: serde_json::Value = serde_json::from_str(
+            r#"{
+            "ok": true,
+            "messages": [
+                {
+                    "text": "text1",
+                    "ts": "1589788800.000001"
+                },
+                {
+                    "text": "text2",
+                    "ts": "1589788800.000002"
+                }
+            ]
+        }"#,
+        )
+        .unwrap();
+        let actual = slack_api.build_slack_messages(&res);
+        let expected = vec![
+            SlackMessage {
+                text: "text1".to_string(),
+                timestamp: 1589788800.000001,
+            },
+            SlackMessage {
+                text: "text2".to_string(),
+                timestamp: 1589788800.000002,
+            },
+        ];
+        assert_eq!(actual, expected);
+    }
 
-        let slack_api = SlackAPI {
-            params: SlackAPIParams::build(),
-        };
+    #[test]
+    fn slack_api_filter() {
+        let slack_api = SlackAPI::new(SlackAPIParams::new(
+            CHANNEL_ID.to_string(),
+            TOKEN.to_string(),
+        ));
 
-        let slack_messages = vec![SlackMessage {
-            timestamp: 1578472400.0,
-            text: "test".to_string(),
-        }];
-        let expected = vec![SlackMessage {
-            timestamp: 1578472400.0,
-            text: "test".to_string(),
-        }];
-        let threshold = 0.0;
+        let slack_messages = vec![
+            SlackMessage {
+                timestamp: 1.0,
+                text: "test1".to_string(),
+            },
+            SlackMessage {
+                timestamp: 2.0,
+                text: "test2".to_string(),
+            },
+            SlackMessage {
+                timestamp: 3.0,
+                text: "test3".to_string(),
+            },
+        ];
+        let expected = vec![
+            SlackMessage {
+                timestamp: 2.0,
+                text: "test2".to_string(),
+            },
+            SlackMessage {
+                timestamp: 3.0,
+                text: "test3".to_string(),
+            },
+        ];
+        let threshold = 1.0;
         let filtered_slack_messages = slack_api.filter(slack_messages, threshold);
         assert_eq!(&expected, &filtered_slack_messages);
     }
-}
-
-#[cfg(test)]
-mod test_filter_slack_messages_option {
-    use super::*;
-
-    const EXCLUDE_DAYS: i64 = 1;
-    const EXCLUDE_HOURS: i64 = 2;
-    const EXCLUDE_MINUTES: i64 = 3;
 
     #[test]
-    fn build() {
+    fn slack_api_reverse() {
+        let slack_api = SlackAPI::new(SlackAPIParams::new(
+            CHANNEL_ID.to_string(),
+            TOKEN.to_string(),
+        ));
+
+        let mut slack_messages = vec![
+            SlackMessage {
+                timestamp: 1.0,
+                text: "test1".to_string(),
+            },
+            SlackMessage {
+                timestamp: 2.0,
+                text: "test2".to_string(),
+            },
+            SlackMessage {
+                timestamp: 3.0,
+                text: "test3".to_string(),
+            },
+        ];
+        let mut expected = vec![
+            SlackMessage {
+                timestamp: 3.0,
+                text: "test3".to_string(),
+            },
+            SlackMessage {
+                timestamp: 2.0,
+                text: "test2".to_string(),
+            },
+            SlackMessage {
+                timestamp: 1.0,
+                text: "test1".to_string(),
+            },
+        ];
+        let reversed_slack_messages = slack_api.reverse(&mut slack_messages);
+        assert_eq!(&mut expected, reversed_slack_messages);
+    }
+
+    #[test]
+    fn filter_slack_messages_option_new() {
         let local_dt = Local::now();
-        let fiter_options = FilterSlackMessageOptions::build(
-            local_dt,
-            EXCLUDE_DAYS,
-            EXCLUDE_HOURS,
-            EXCLUDE_MINUTES,
-        );
+        let fiter_options =
+            FilterSlackMessageOptions::new(local_dt, EXCLUDE_DAYS, EXCLUDE_HOURS, EXCLUDE_MINUTES);
         assert_eq!(fiter_options.local_dt, local_dt);
         assert_eq!(fiter_options.exclude_days, EXCLUDE_DAYS);
         assert_eq!(fiter_options.exclude_hours, EXCLUDE_HOURS);
@@ -294,9 +369,9 @@ mod test_filter_slack_messages_option {
     }
 
     #[test]
-    fn get_filter_threshold() {
+    fn filter_slack_messages_option_get_filter_threshold() {
         let local_dt = Local::now();
-        let fiter_options = FilterSlackMessageOptions::build(local_dt, 1, 2, 3);
+        let fiter_options = FilterSlackMessageOptions::new(local_dt, 1, 2, 3);
         let threshold = fiter_options.get_threshold();
         let expected: f64 = (local_dt
             - Duration::days(EXCLUDE_DAYS)

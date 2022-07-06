@@ -1,6 +1,7 @@
-use crate::slack::SlackMessage;
+use anyhow::Result;
 use std::collections::HashMap;
-use std::env;
+
+use crate::slack::SlackMessage;
 
 const IFTTT_BASE_URL: &str = "https://maker.ifttt.com/trigger";
 
@@ -10,66 +11,128 @@ pub struct IFTTTAPIParams {
 }
 
 impl IFTTTAPIParams {
-    pub fn build() -> IFTTTAPIParams {
-        IFTTTAPIParams {
-            event_name: env::var("IFTTT_EVENT_NAME").expect("$IFTTT_EVENT_NAME is not set"),
-            token: env::var("IFTTT_WEBHOOK_TOKEN").expect("$IFTTT_WEBHOOK_TOKEN is not set"),
+    pub fn new(ifttt_event_name: String, ifttt_webhook_token: String) -> Self {
+        Self {
+            event_name: ifttt_event_name,
+            token: ifttt_webhook_token,
         }
     }
 }
 
 pub struct IFTTTAPI {
     pub params: IFTTTAPIParams,
+    client: reqwest::blocking::Client,
 }
 
 impl IFTTTAPI {
-    pub fn kick(&self, slack_messages: Vec<SlackMessage>) {
-        self.post_ifttt_webhook(slack_messages);
+    pub fn new(params: IFTTTAPIParams) -> Self {
+        let client = reqwest::blocking::Client::new();
+        Self { params, client }
     }
 
-    fn post_ifttt_webhook(&self, slack_messages: Vec<SlackMessage>) {
-        let ifttt_url = format!(
-            "{}/{}/with/key/{}",
-            IFTTT_BASE_URL, self.params.event_name, self.params.token
-        );
-        let ifttt_client = reqwest::blocking::Client::new();
+    pub fn kick(&self, slack_messages: Vec<SlackMessage>) {
+        let ifttt_url = self.build_ifttt_url();
         for m in slack_messages {
-            let mut payload = HashMap::new();
-            payload.insert("value1", m.timestamp.to_string());
-            payload.insert("value2", m.text.to_string());
-            let payload = serde_json::to_string(&payload).unwrap();
-            let res = ifttt_client
-                .post(&ifttt_url)
-                .header("Content-Type", "application/json")
-                .body(payload)
-                .send()
-                .expect("failed to post");
-            if res.status().is_success() {
-                println!("message posted: {},{}", m.timestamp, m.text);
-            } else {
-                println!("failed to post: {},{}", m.timestamp, m.text);
+            let payload = self.build_payload(&m);
+            let res = self.post_ifttt_webhook(&ifttt_url, payload);
+            match res {
+                Ok(_) => println!("message posted: {},{}", m.timestamp, m.text),
+                Err(e) => {
+                    println!("Error sending IFTTT webhook: StatusCode: {:?}", e.status());
+                }
             }
         }
+    }
+
+    fn build_ifttt_url(&self) -> String {
+        format!(
+            "{}/{}/with/key/{}",
+            IFTTT_BASE_URL, self.params.event_name, self.params.token
+        )
+    }
+
+    fn build_payload(&self, m: &SlackMessage) -> String {
+        let mut payload = HashMap::new();
+        payload.insert("value1", m.timestamp.to_string());
+        payload.insert("value2", m.text.to_string());
+        serde_json::to_string(&payload).unwrap()
+    }
+
+    fn post_ifttt_webhook(
+        &self,
+        ifttt_url: &String,
+        payload: String,
+    ) -> Result<reqwest::blocking::Response, reqwest::Error> {
+        self.client
+            .post(ifttt_url)
+            .header("Content-Type", "application/json")
+            .body(payload)
+            .send()
     }
 }
 
 #[cfg(test)]
-mod test_ifttt_api_params {
+mod test {
     use super::*;
 
     const EVENT_NAME: &str = "channel_id";
     const TOKEN: &str = "token";
 
-    fn set_up_env() {
-        env::set_var("IFTTT_EVENT_NAME", EVENT_NAME);
-        env::set_var("IFTTT_WEBHOOK_TOKEN", TOKEN);
+    #[test]
+    fn ifttt_api_params_new() {
+        let params = IFTTTAPIParams::new(EVENT_NAME.to_string(), TOKEN.to_string());
+        assert_eq!(params.event_name, EVENT_NAME);
+        assert_eq!(params.token, TOKEN);
     }
 
     #[test]
-    fn build() {
-        set_up_env();
-        let params = IFTTTAPIParams::build();
-        assert_eq!(params.event_name, EVENT_NAME);
-        assert_eq!(params.token, TOKEN);
+    fn ifttt_api_new() {
+        let params = IFTTTAPIParams::new(EVENT_NAME.to_string(), TOKEN.to_string());
+        let api = IFTTTAPI::new(params);
+        assert_eq!(api.params.event_name, EVENT_NAME);
+        assert_eq!(api.params.token, TOKEN);
+    }
+
+    #[test]
+    fn ifttt_api_build_ifttt_url() {
+        let params = IFTTTAPIParams::new(EVENT_NAME.to_string(), TOKEN.to_string());
+        let api = IFTTTAPI::new(params);
+        let url = api.build_ifttt_url();
+        assert_eq!(
+            url,
+            format!("{}/{}/with/key/{}", IFTTT_BASE_URL, EVENT_NAME, TOKEN)
+        );
+    }
+
+    #[test]
+    fn ifttt_api_build_payload() {
+        let m = SlackMessage {
+            timestamp: 12345.0,
+            text: "test".to_string(),
+        };
+        let expected = r#"{"value1":"12345","value2":"test"}"#.to_string();
+        let params = IFTTTAPIParams::new(EVENT_NAME.to_string(), TOKEN.to_string());
+        let api = IFTTTAPI::new(params);
+        let actual = api.build_payload(&m);
+
+        let actual_des: HashMap<String, String> = serde_json::from_str(&actual).unwrap();
+        let expected_des: HashMap<String, String> = serde_json::from_str(&expected).unwrap();
+        assert_eq!(actual_des, expected_des);
+    }
+
+    #[test]
+    // FIXME: post の mock を作成する必要があるかも
+    fn ifttt_api_post_ifttt_webhook() {
+        let m = SlackMessage {
+            timestamp: 12345.0,
+            text: "test".to_string(),
+        };
+        let params = IFTTTAPIParams::new(EVENT_NAME.to_string(), TOKEN.to_string());
+        let api = IFTTTAPI::new(params);
+        let url = api.build_ifttt_url();
+        let payload = api.build_payload(&m);
+        let actual = api.post_ifttt_webhook(&url, payload);
+        let expected = reqwest::StatusCode::UNAUTHORIZED;
+        assert_eq!(expected, actual.unwrap().status());
     }
 }
