@@ -14,13 +14,13 @@ run:
 	cargo run --bin kakeibo-rs
 
 build-lambda:
-	docker build -t kakeibo-rs-lambda -f ./docker/lambda/Dockerfile .
-	docker run --rm -v $(PWD)/target:/workspace/target kakeibo-rs-lambda cargo lambda build --release --arm64 --bin lambda --output-format zip
+	docker build -t kakeibo-rs-lambda -f ./docker/kakeibo-rs-lambda/Dockerfile .
+	docker run --rm -v $(PWD)/target:/workspace/target kakeibo-rs-lambda cargo lambda build --release --arm64 --bin kakeibo-rs-lambda --output-format zip
 
 deploy-lambda:
 	aws lambda create-function --function-name kakeibo-rs \
 		--handler bootstrap \
-		--zip-file fileb://./target/lambda/lambda/bootstrap.zip \
+		--zip-file fileb://./target/lambda/kakeibo-rs-lambda/bootstrap.zip \
 		--runtime provided.al2023 \
 		--role $(LAMBDA_ROLE_ARN) \
 		--environment Variables="{RUST_BACKTRACE=1,IFTTT_EVENT_NAME=$(IFTTT_EVENT_NAME),IFTTT_WEBHOOK_TOKEN=$(IFTTT_WEBHOOK_TOKEN),SLACK_TOKEN=$(SLACK_TOKEN),SLACK_CHANNEL_ID=$(SLACK_CHANNEL_ID)}" \
@@ -29,7 +29,7 @@ deploy-lambda:
 
 update-lambda-code:
 	aws lambda update-function-code --function-name kakeibo-rs \
-		--zip-file fileb://./target/lambda/lambda/bootstrap.zip
+		--zip-file fileb://./target/lambda/kakeibo-rs-lambda/bootstrap.zip
 
 update-lambda-configuration:
 	aws lambda update-function-configuration --function-name kakeibo-rs \

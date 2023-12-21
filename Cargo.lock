@@ -553,7 +553,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "lambda"
+name = "kakeibo-rs-lambda"
 version = "0.1.0"
 dependencies = [
  "kakeibo-rs",
