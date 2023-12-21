@@ -9,6 +9,7 @@ use kakeibo_rs::handler::run_kakeibo;
 /// The runtime pays no attention to the contents of the request payload.
 // NOTE: `aws lambda invoke`` で --payload で渡すときは key になる値を Request 構造体のフィールド名にする必要がある
 #[derive(Deserialize)]
+#[cfg(not(tarpaulin_include))]
 struct Request {}
 
 /// This is a made-up example of what a response structure may look like.
@@ -16,6 +17,7 @@ struct Request {}
 /// to be serialized into json. The runtime pays no attention
 /// to the contents of the response payload.
 #[derive(Serialize)]
+#[cfg(not(tarpaulin_include))]
 struct Response {
     req_id: String,
     msg: String,
@@ -26,6 +28,7 @@ struct Response {
 /// There are some code example in the following URLs:
 /// - <https://github.com/awslabs/aws-lambda-rust-runtime/tree/main/examples>
 /// - <https://github.com/aws-samples/serverless-rust-demo/>
+#[cfg(not(tarpaulin_include))]
 async fn function_handler(event: LambdaEvent<Request>) -> Result<Response, Error> {
     run_kakeibo()?;
 
@@ -40,6 +43,7 @@ async fn function_handler(event: LambdaEvent<Request>) -> Result<Response, Error
 }
 
 #[tokio::main]
+#[cfg(not(tarpaulin_include))]
 async fn main() -> Result<(), Error> {
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
