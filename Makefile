@@ -1,4 +1,4 @@
-.PHONY: lint test run build-lambda doc
+.PHONY: lint test run doc build-lambda deploy-lambda update-lambda-code update-lambda-configuration kick-lambda
 
 include .env
 
@@ -12,6 +12,9 @@ test:
 
 run:
 	cargo run --bin kakeibo-rs
+
+doc:
+	cargo doc --no-deps --all-features --open
 
 build-lambda:
 	docker build -t kakeibo-rs-lambda -f ./docker/kakeibo-rs-lambda/Dockerfile .
@@ -38,5 +41,4 @@ update-lambda-configuration:
 kick-lambda:
 	aws lambda invoke --cli-binary-format raw-in-base64-out --function-name kakeibo-rs /dev/stdout
 
-doc:
-	cargo doc --no-deps --all-features --open
+
