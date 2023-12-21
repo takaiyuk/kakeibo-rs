@@ -45,20 +45,22 @@ impl SlackAPI {
         Self { params, threshold }
     }
 
-    pub fn extract(&self) -> Vec<SlackMessage> {
-        let slack_messages = self.get_conversations_history();
+    pub fn extract(&self) -> Result<Vec<SlackMessage>> {
+        let slack_messages = self.get_conversations_history()?;
         let mut slack_messages = self.filter(slack_messages, self.threshold);
         let slack_messages = self.reverse(&mut slack_messages);
-        slack_messages.clone()
+        Ok(slack_messages.clone())
     }
 
-    fn get_conversations_history(&self) -> Vec<SlackMessage> {
+    fn get_conversations_history(&self) -> Result<Vec<SlackMessage>> {
         let res = self.post();
         let res = match res {
             Ok(res) => self.json(res),
             Err(e) => {
-                println!("{}", e);
-                return vec![];
+                return Err(anyhow::anyhow!(
+                    "failed to get conversations history: {:?}",
+                    e
+                ));
             }
         };
         self.build_slack_messages(&res)
@@ -82,10 +84,11 @@ impl SlackAPI {
         res.json().expect("failed to deserialize json")
     }
 
-    fn build_slack_messages(&self, res: &serde_json::Value) -> Vec<SlackMessage> {
-        res["messages"]
-            .as_array()
-            .unwrap()
+    fn build_slack_messages(&self, res: &serde_json::Value) -> Result<Vec<SlackMessage>> {
+        let messages = res["messages"].as_array().ok_or_else(|| {
+            anyhow::anyhow!("failed to get messages from slack response: {:?}", res)
+        })?;
+        let slack_messages = messages
             .iter()
             .map(|message| {
                 let timestamp = message["ts"].as_str().unwrap();
@@ -95,7 +98,8 @@ impl SlackAPI {
                     text: text.to_string(),
                 }
             })
-            .collect()
+            .collect();
+        Ok(slack_messages)
     }
 
     fn filter(&self, slack_messages: Vec<SlackMessage>, threshold: f64) -> Vec<SlackMessage> {
@@ -268,7 +272,7 @@ mod test {
         }"#,
         )
         .unwrap();
-        let actual = slack_api.build_slack_messages(&res);
+        let actual = slack_api.build_slack_messages(&res).unwrap();
         let expected = vec![
             SlackMessage {
                 text: "text1".to_string(),
