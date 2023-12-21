@@ -1,4 +1,4 @@
-.PHONY: lint test run doc build-lambda deploy-lambda update-lambda-code update-lambda-configuration kick-lambda
+.PHONY: lint test run doc build-lambda deploy-lambda kick-lambda
 
 include .env
 
@@ -17,27 +17,10 @@ doc:
 	cargo doc --no-deps --all-features --open
 
 build-lambda:
-	cargo lambda build --release --arm64 --bin kakeibo-rs-lambda --output-format zip
+	cargo lambda build --release --arm64 --bin kakeibo-rs-lambda
 
 deploy-lambda:
-	aws lambda create-function --function-name kakeibo-rs \
-		--handler bootstrap \
-		--zip-file fileb://./target/lambda/kakeibo-rs-lambda/bootstrap.zip \
-		--runtime provided.al2023 \
-		--role $(LAMBDA_ROLE_ARN) \
-		--environment Variables="{RUST_BACKTRACE=1,IFTTT_EVENT_NAME=$(IFTTT_EVENT_NAME),IFTTT_WEBHOOK_TOKEN=$(IFTTT_WEBHOOK_TOKEN),SLACK_TOKEN=$(SLACK_TOKEN),SLACK_CHANNEL_ID=$(SLACK_CHANNEL_ID)}" \
-		--tracing-config Mode=Active \
-		--architectures arm64
-
-update-lambda-code:
-	aws lambda update-function-code --function-name kakeibo-rs \
-		--zip-file fileb://./target/lambda/kakeibo-rs-lambda/bootstrap.zip
-
-update-lambda-configuration:
-	aws lambda update-function-configuration --function-name kakeibo-rs \
-		--environment Variables="{RUST_BACKTRACE=1,IFTTT_EVENT_NAME=$(IFTTT_EVENT_NAME),IFTTT_WEBHOOK_TOKEN=$(IFTTT_WEBHOOK_TOKEN),SLACK_TOKEN=$(SLACK_TOKEN),SLACK_CHANNEL_ID=$(SLACK_CHANNEL_ID)}"
+	cargo lambda deploy kakeibo-rs-lambda --env-file .env
 
 kick-lambda:
-	aws lambda invoke --cli-binary-format raw-in-base64-out --function-name kakeibo-rs /dev/stdout
-
-
+	cargo lambda invoke kakeibo-rs-lambda --remote --output-format json --data-ascii "{}"
