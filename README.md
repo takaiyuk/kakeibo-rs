@@ -46,6 +46,15 @@ make test
 
 ref. https://github.com/awslabs/aws-lambda-rust-runtime
 
+### 0. Setup
+
+Install Cargo Lambda
+
+```sh
+brew tap cargo-lambda/cargo-lambda
+brew install cargo-lambda
+```
+
 ### 1. Build lambda function
 
 ```sh

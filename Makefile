@@ -17,8 +17,7 @@ doc:
 	cargo doc --no-deps --all-features --open
 
 build-lambda:
-	docker build -t kakeibo-rs-lambda -f ./docker/kakeibo-rs-lambda/Dockerfile .
-	docker run --rm -v $(PWD)/target:/workspace/target kakeibo-rs-lambda cargo lambda build --release --arm64 --bin kakeibo-rs-lambda --output-format zip
+	cargo lambda build --release --arm64 --bin kakeibo-rs-lambda --output-format zip
 
 deploy-lambda:
 	aws lambda create-function --function-name kakeibo-rs \
