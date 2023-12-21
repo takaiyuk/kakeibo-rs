@@ -34,4 +34,21 @@ $ make test
 
 ## Lambda
 
-[To Be Updated]
+ref. https://github.com/awslabs/aws-lambda-rust-runtime
+
+### Setup
+
+1. Install Cargo Lambda
+
+- Use Homebrew on MacOS:
+
+```sh
+brew tap cargo-lambda/cargo-lambda
+brew install cargo-lambda
+```
+
+2. Cargo Lambda Build
+
+```sh
+make lambda
+```

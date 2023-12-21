@@ -2,13 +2,13 @@ use anyhow::Result;
 use dotenvy::dotenv;
 use std::env;
 
-use kakeibo_rs::ifttt::IFTTTAPIParams;
-use kakeibo_rs::ifttt::IFTTTAPI;
-use kakeibo_rs::slack::SlackAPI;
-use kakeibo_rs::slack::SlackAPIParams;
+use crate::ifttt::IFTTTAPIParams;
+use crate::ifttt::IFTTTAPI;
+use crate::slack::SlackAPI;
+use crate::slack::SlackAPIParams;
 
 #[cfg(not(tarpaulin_include))]
-fn main() -> Result<()> {
+pub fn run_kakeibo() -> Result<()> {
     dotenv().ok();
 
     let slack_channel_id = env::var("SLACK_CHANNEL_ID").expect("$SLACK_CHANNEL_ID is not set");
@@ -26,5 +26,6 @@ fn main() -> Result<()> {
         IFTTTAPI::new(IFTTTAPIParams::new(ifttt_event_name, ifttt_webhook_token))
             .kick(slack_messages);
     }
+
     Ok(())
 }
