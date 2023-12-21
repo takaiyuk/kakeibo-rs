@@ -21,34 +21,61 @@ graph LR;
 
 ## Execute
 
+```sh
+# .env を作成して環境変数を設定する
+cp .env.example .env
+make run
 ```
-$ cp .env.example .env
-$ make run
+
+### Lint
+
+```sh
+make lint
 ```
 
 ### Test
 
-```
-$ make test
+テストカバレッジを計測するために [cargo-tarpaulin](https://github.com/xd009642/tarpaulin) をインストールする
+
+```sh
+cargo install cargo-tarpaulin
+make test
 ```
 
 ## Lambda
 
 ref. https://github.com/awslabs/aws-lambda-rust-runtime
 
-### Setup
-
-1. Install Cargo Lambda
-
-- Use Homebrew on MacOS:
+### 1. Build lambda function
 
 ```sh
-brew tap cargo-lambda/cargo-lambda
-brew install cargo-lambda
+make build-lambda
 ```
 
-2. Cargo Lambda Build
+### 2. Deploy lambda function
+
+#### 2-1. Create
 
 ```sh
-make lambda
+make deploy-lambda
+```
+
+#### 2-2. Update
+
+function code
+
+```sh
+make update-lambda-code
+```
+
+function configuration
+
+```sh
+make update-lambda-configuration
+```
+
+### 3. Execute lambda function
+
+```sh
+make kick-lambda
 ```
