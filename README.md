@@ -13,9 +13,9 @@ Slack の特定チャンネルに送信されたメッセージを Spreadsheet �
 ```mermaid
 graph LR;
     EventBridge -- kick --> Lambda;
-    Lambda -- get --> Slack
+    Lambda -- GET --> Slack
     Slack --> Lambda;
-    Lambda -- post --> IFTTT;
+    Lambda -- POST --> IFTTT;
     IFTTT --> Spreadsheet;
 ```
 
@@ -46,44 +46,28 @@ make test
 
 ref. https://github.com/awslabs/aws-lambda-rust-runtime
 
-### 0. Setup
+### 0. セットアップ
 
-Install Cargo Lambda
+Cargo Lambda をインストールする
 
 ```sh
 brew tap cargo-lambda/cargo-lambda
 brew install cargo-lambda
 ```
 
-### 1. Build lambda function
+### 1. ビルド
 
 ```sh
 make build-lambda
 ```
 
-### 2. Deploy lambda function
-
-#### 2-1. Create
+### 2. デプロイ
 
 ```sh
 make deploy-lambda
 ```
 
-#### 2-2. Update
-
-function code
-
-```sh
-make update-lambda-code
-```
-
-function configuration
-
-```sh
-make update-lambda-configuration
-```
-
-### 3. Execute lambda function
+### 3. 実行
 
 ```sh
 make kick-lambda
