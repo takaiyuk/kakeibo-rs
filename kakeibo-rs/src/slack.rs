@@ -31,29 +31,35 @@ impl SlackAPIParams {
     }
 }
 
-pub struct SlackAPI {
+pub trait SlackAPI {
+    fn extract(&self) -> Result<Vec<SlackMessage>>;
+}
+
+pub struct SlackAPIClient {
     pub params: SlackAPIParams,
+    client: reqwest::blocking::Client,
     threshold: f64,
 }
 
-impl SlackAPI {
+impl SlackAPIClient {
     pub fn new(params: SlackAPIParams) -> Self {
+        let client = reqwest::blocking::Client::new();
         let local_dt = Local::now();
         let fiter_options =
             FilterSlackMessageOptions::new(local_dt, EXCLUDE_DAYS, EXCLUDE_HOURS, EXCLUDE_MINUTES);
         let threshold = fiter_options.get_threshold();
-        Self { params, threshold }
+        Self { params, client, threshold }
     }
 
-    pub fn extract(&self) -> Result<Vec<SlackMessage>> {
-        let slack_messages = self.get_conversations_history()?;
-        let mut slack_messages = self.filter(slack_messages, self.threshold);
-        let slack_messages = self.reverse(&mut slack_messages);
-        Ok(slack_messages.clone())
+    fn build_slack_url(&self) -> String {
+        format!(
+            "{}/{}?channel={}",
+            self.params.base_url, self.params.method, self.params.channel
+        )
     }
 
-    fn get_conversations_history(&self) -> Result<Vec<SlackMessage>> {
-        let res = self.post();
+    fn get_conversations_history(&self, slack_url: String) -> Result<Vec<SlackMessage>> {
+        let res = self.post(slack_url);
         let res = match res {
             Ok(res) => self.json(res),
             Err(e) => {
@@ -66,15 +72,10 @@ impl SlackAPI {
         self.build_slack_messages(&res)
     }
 
-    fn post(&self) -> Result<reqwest::blocking::Response, reqwest::Error> {
-        let slack_url = format!(
-            "{}/{}?channel={}",
-            self.params.base_url, self.params.method, self.params.channel
-        );
+    fn post(&self, slack_url: String) -> Result<reqwest::blocking::Response, reqwest::Error> {
         let slack_header_auth = format!("Bearer {}", self.params.token);
 
-        let slack_client = reqwest::blocking::Client::new();
-        slack_client
+        self.client
             .post(slack_url)
             .header("Authorization", slack_header_auth)
             .send()
@@ -112,6 +113,16 @@ impl SlackAPI {
     fn reverse<'a>(&self, slack_messages: &'a mut Vec<SlackMessage>) -> &'a mut Vec<SlackMessage> {
         slack_messages.reverse();
         slack_messages
+    }
+}
+
+impl SlackAPI for SlackAPIClient {
+    fn extract(&self) -> Result<Vec<SlackMessage>> {
+        let slack_url = self.build_slack_url();
+        let slack_messages = self.get_conversations_history(slack_url)?;
+        let mut slack_messages = self.filter(slack_messages, self.threshold);
+        let slack_messages = self.reverse(&mut slack_messages);
+        Ok(slack_messages.clone())
     }
 }
 
@@ -156,6 +167,7 @@ mod test {
 
     const CHANNEL_ID: &str = "channel_id";
     const TOKEN: &str = "token";
+    const PATH: &str = "/test";
     const EXCLUDE_DAYS: i64 = 1;
     const EXCLUDE_HOURS: i64 = 2;
     const EXCLUDE_MINUTES: i64 = 3;
@@ -171,86 +183,46 @@ mod test {
     #[test]
     fn slack_api_new() {
         let params = SlackAPIParams::new(CHANNEL_ID.to_string(), TOKEN.to_string());
-        let slack_api = SlackAPI::new(params);
-        assert_eq!(slack_api.params.base_url, SLACK_BASE_URL);
-        assert_eq!(slack_api.params.method, SLACK_API_METHOD);
-        assert_eq!(slack_api.params.channel, CHANNEL_ID);
-        assert_eq!(slack_api.params.token, TOKEN);
+        let slack_client = SlackAPIClient::new(params);
+        assert_eq!(slack_client.params.base_url, SLACK_BASE_URL);
+        assert_eq!(slack_client.params.method, SLACK_API_METHOD);
+        assert_eq!(slack_client.params.channel, CHANNEL_ID);
+        assert_eq!(slack_client.params.token, TOKEN);
     }
 
-    // FIXME: post の mock を作成する必要があるかも
-    // #[test]
-    // fn slack_api_post() {
-    //     struct Fixture {
-    //         name: &'static str,
-    //         base_url: String,
-    //         method: String,
-    //         channel: String,
-    //         token: String,
-    //         expected: String,
-    //     }
-    //     let fixtures = vec![
-    //         Fixture {
-    //             name: "正常系",
-    //             base_url: SLACK_BASE_URL.to_string(),
-    //             method: SLACK_API_METHOD.to_string(),
-    //             channel: CHANNEL_ID.to_string(),
-    //             token: TOKEN.to_string(),
-    //             expected: "invalid_auth".to_string(),
-    //         },
-    //         Fixture {
-    //             name: "base_url が不正",
-    //             base_url: "https://slack.com/api".to_string(),
-    //             method: "method".to_string(),
-    //             channel: "channel_id".to_string(),
-    //             token: "token".to_string(),
-    //             expected: "unknown_method".to_string(),
-    //         },
-    //         Fixture {
-    //             name: "method が不正",
-    //             base_url: "https://slack.com/api".to_string(),
-    //             method: "method".to_string(),
-    //             channel: "channel_id".to_string(),
-    //             token: "token".to_string(),
-    //             expected: "unknown_method".to_string(),
-    //         },
-    //         Fixture {
-    //             name: "channel が不正",
-    //             base_url: "https://slack.com/api".to_string(),
-    //             method: "method".to_string(),
-    //             channel: "channel_id".to_string(),
-    //             token: "token".to_string(),
-    //             expected: "unknown_method".to_string(),
-    //         },
-    //         Fixture {
-    //             name: "token が不正",
-    //             base_url: "https://slack.com/api".to_string(),
-    //             method: "method".to_string(),
-    //             channel: "channel_id".to_string(),
-    //             token: "token".to_string(),
-    //             expected: "unknown_method".to_string(),
-    //         },
-    //     ];
-    //     for fixture in fixtures.iter() {
-    //         let slack_api = SlackAPI::new(SlackAPIParams {
-    //             base_url: fixture.base_url.clone(),
-    //             method: fixture.method.clone(),
-    //             channel: fixture.channel.clone(),
-    //             token: fixture.token.clone(),
-    //         });
-    //         let res = slack_api.post();
-    //         let res = match res {
-    //             Ok(res) => slack_api.json(res),
-    //             Err(e) => panic!("{} {}", fixture.name, e),
-    //         };
-    //         assert!(!res["ok"].as_bool().unwrap(), "{}", fixture.name);
-    //         assert_eq!(res["error"], fixture.expected.clone(), "{}", fixture.name);
-    //     }
-    // }
+    #[test]
+    fn slack_api_post() {
+        // Mock server
+        let mut server = mockito::Server::new();
+        let url = format!("{}{}", server.url(), PATH);
+        server
+            .mock("POST", PATH)
+            .with_status(200)
+            .with_header("Authorization", format!("Bearer {}", TOKEN.clone()).as_str())
+            .with_header("content-type", "application/json")
+            .with_body(r#"{
+                "ok": true,
+                "messages": []
+            }"#)
+            .create();
+
+        let slack_client = SlackAPIClient::new(SlackAPIParams {
+            base_url: SLACK_BASE_URL.to_string(),
+            method: SLACK_API_METHOD.to_string(),
+            channel: CHANNEL_ID.to_string(),
+            token: TOKEN.to_string(),
+        });
+        let res = slack_client.post(url);
+        let res = match res {
+            Ok(res) => slack_client.json(res),
+            Err(e) => panic!("failed to post: {:?}", e),
+        };
+        assert!(res["ok"].as_bool().unwrap());
+    }
 
     #[test]
     fn test_build_slack_messages() {
-        let slack_api = SlackAPI::new(SlackAPIParams {
+        let slack_client = SlackAPIClient::new(SlackAPIParams {
             base_url: SLACK_BASE_URL.to_string(),
             method: SLACK_API_METHOD.to_string(),
             channel: CHANNEL_ID.to_string(),
@@ -272,7 +244,7 @@ mod test {
         }"#,
         )
         .unwrap();
-        let actual = slack_api.build_slack_messages(&res).unwrap();
+        let actual = slack_client.build_slack_messages(&res).unwrap();
         let expected = vec![
             SlackMessage {
                 text: "text1".to_string(),
@@ -288,7 +260,7 @@ mod test {
 
     #[test]
     fn slack_api_filter() {
-        let slack_api = SlackAPI::new(SlackAPIParams::new(
+        let slack_client = SlackAPIClient::new(SlackAPIParams::new(
             CHANNEL_ID.to_string(),
             TOKEN.to_string(),
         ));
@@ -318,13 +290,13 @@ mod test {
             },
         ];
         let threshold = 1.0;
-        let filtered_slack_messages = slack_api.filter(slack_messages, threshold);
+        let filtered_slack_messages = slack_client.filter(slack_messages, threshold);
         assert_eq!(&expected, &filtered_slack_messages);
     }
 
     #[test]
     fn slack_api_reverse() {
-        let slack_api = SlackAPI::new(SlackAPIParams::new(
+        let slack_client = SlackAPIClient::new(SlackAPIParams::new(
             CHANNEL_ID.to_string(),
             TOKEN.to_string(),
         ));
@@ -357,7 +329,7 @@ mod test {
                 text: "test1".to_string(),
             },
         ];
-        let reversed_slack_messages = slack_api.reverse(&mut slack_messages);
+        let reversed_slack_messages = slack_client.reverse(&mut slack_messages);
         assert_eq!(&mut expected, reversed_slack_messages);
     }
 
