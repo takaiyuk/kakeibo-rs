@@ -25,7 +25,7 @@ pub fn run_kakeibo() -> Result<()> {
         let ifttt_webhook_token =
             env::var("IFTTT_WEBHOOK_TOKEN").expect("$IFTTT_WEBHOOK_TOKEN is not set");
         let ifttt_api_params = IFTTTAPIParams::new(ifttt_event_name, ifttt_webhook_token);
-        let ifttt_client = IFTTTAPIClient::new(ifttt_api_params, None);
+        let ifttt_client = IFTTTAPIClient::new(ifttt_api_params);
         ifttt_client.kick(slack_messages);
     }
 
