@@ -19,28 +19,22 @@ impl IFTTTAPIParams {
     }
 }
 
-pub struct IFTTTAPI {
+pub trait IFTTTAPI {
+    fn kick(&self, slack_messages: Vec<SlackMessage>);
+}
+
+pub struct IFTTTAPIClient {
     pub params: IFTTTAPIParams,
     client: reqwest::blocking::Client,
 }
 
-impl IFTTTAPI {
-    pub fn new(params: IFTTTAPIParams) -> Self {
-        let client = reqwest::blocking::Client::new();
-        Self { params, client }
-    }
-
-    pub fn kick(&self, slack_messages: Vec<SlackMessage>) {
-        let ifttt_url = self.build_ifttt_url();
-        for m in slack_messages {
-            let payload = self.build_payload(&m);
-            let res = self.post_ifttt_webhook(&ifttt_url, payload);
-            match res {
-                Ok(_) => println!("message posted: {},{}", m.timestamp, m.text),
-                Err(e) => {
-                    println!("Error sending IFTTT webhook: StatusCode: {:?}", e.status());
-                }
-            }
+impl IFTTTAPIClient {
+    pub fn new(params: IFTTTAPIParams, client: Option<reqwest::blocking::Client>) -> Self {
+        if let Some(c) = client {
+            Self { params, client: c }
+        } else {
+            let c = reqwest::blocking::Client::new();
+            Self { params, client: c }
         }
     }
 
@@ -71,6 +65,21 @@ impl IFTTTAPI {
     }
 }
 
+impl IFTTTAPI for IFTTTAPIClient {
+    fn kick(&self, slack_messages: Vec<SlackMessage>) {
+        let ifttt_url = self.build_ifttt_url();
+        for m in slack_messages {
+            let payload = self.build_payload(&m);
+            match self.post_ifttt_webhook(&ifttt_url, payload) {
+                Ok(_) => println!("Message posted: `{},{}`", m.timestamp, m.text),
+                Err(e) => {
+                    println!("Error sending IFTTT webhook: StatusCode: {:?}", e.status());
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -88,7 +97,7 @@ mod test {
     #[test]
     fn ifttt_api_new() {
         let params = IFTTTAPIParams::new(EVENT_NAME.to_string(), TOKEN.to_string());
-        let api = IFTTTAPI::new(params);
+        let api = IFTTTAPIClient::new(params, None);
         assert_eq!(api.params.event_name, EVENT_NAME);
         assert_eq!(api.params.token, TOKEN);
     }
@@ -96,7 +105,7 @@ mod test {
     #[test]
     fn ifttt_api_build_ifttt_url() {
         let params = IFTTTAPIParams::new(EVENT_NAME.to_string(), TOKEN.to_string());
-        let api = IFTTTAPI::new(params);
+        let api = IFTTTAPIClient::new(params, None);
         let url = api.build_ifttt_url();
         assert_eq!(
             url,
@@ -112,7 +121,7 @@ mod test {
         };
         let expected = r#"{"value1":"12345","value2":"test"}"#.to_string();
         let params = IFTTTAPIParams::new(EVENT_NAME.to_string(), TOKEN.to_string());
-        let api = IFTTTAPI::new(params);
+        let api = IFTTTAPIClient::new(params, None);
         let actual = api.build_payload(&m);
 
         let actual_des: HashMap<String, String> = serde_json::from_str(&actual).unwrap();
