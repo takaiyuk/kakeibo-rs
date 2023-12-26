@@ -13,8 +13,7 @@ pub fn run_kakeibo() -> Result<()> {
 
     let slack_channel_id = env::var("SLACK_CHANNEL_ID").expect("$SLACK_CHANNEL_ID is not set");
     let slack_token = env::var("SLACK_TOKEN").expect("$SLACK_TOKEN is not set");
-    let slack_client =
-        SlackAPIClient::new(SlackAPIParams::new(slack_channel_id, slack_token), None);
+    let slack_client = SlackAPIClient::new(SlackAPIParams::new(slack_channel_id, slack_token));
     let slack_messages = slack_client.extract()?;
     slack_messages.iter().for_each(|m| {
         println!("{},{}", m.timestamp, m.text);
