@@ -1,5 +1,7 @@
 # kakeibo-rs
 
+[![codecov](https://codecov.io/gh/takaiyuk/kakeibo-rs/graph/badge.svg?token=JKA0MVWSUY)](https://codecov.io/gh/takaiyuk/kakeibo-rs)
+
 Slack の特定チャンネルに送信されたメッセージを Spreadsheet に転記するもの
 
 [takaiyuk/kakeibo](https://github.com/takaiyuk/kakeibo) の Rust 版
