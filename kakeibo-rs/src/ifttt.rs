@@ -102,6 +102,19 @@ mod test {
     }
 
     #[test]
+    fn ifttt_api_kick() {
+        // FIXME: assert `println` output
+        let m = SlackMessage {
+            timestamp: 12345.0,
+            text: "test".to_string(),
+        };
+        let params = IFTTTAPIParams::new(EVENT_NAME.to_string(), TOKEN.to_string());
+        let api = IFTTTAPIClient::new(params);
+        let slack_messages = vec![m];
+        api.kick(slack_messages);
+    }
+
+    #[test]
     fn ifttt_api_build_ifttt_url() {
         let params = IFTTTAPIParams::new(EVENT_NAME.to_string(), TOKEN.to_string());
         let api = IFTTTAPIClient::new(params);
