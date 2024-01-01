@@ -38,6 +38,7 @@ pub trait SlackAPI {
 pub struct SlackAPIClient {
     pub params: SlackAPIParams,
     client: reqwest::blocking::Client,
+    slack_url: String,
     threshold: f64,
 }
 
@@ -47,14 +48,15 @@ impl SlackAPIClient {
         let local_dt = Local::now();
         let fiter_options =
             FilterSlackMessageOptions::new(local_dt, EXCLUDE_DAYS, EXCLUDE_HOURS, EXCLUDE_MINUTES);
+        let slack_url = Self::build_slack_url(&params);
         let threshold = fiter_options.get_threshold();
-        Self { params, client, threshold }
+        Self { params, client, slack_url, threshold }
     }
 
-    fn build_slack_url(&self) -> String {
+    fn build_slack_url(params: &SlackAPIParams) -> String {
         format!(
             "{}/{}?channel={}",
-            self.params.base_url, self.params.method, self.params.channel
+            params.base_url, params.method, params.channel
         )
     }
 
@@ -118,8 +120,7 @@ impl SlackAPIClient {
 
 impl SlackAPI for SlackAPIClient {
     fn extract(&self) -> Result<Vec<SlackMessage>> {
-        let slack_url = self.build_slack_url();
-        let slack_messages = self.get_conversations_history(slack_url)?;
+        let slack_messages = self.get_conversations_history(self.slack_url.clone())?;
         let mut slack_messages = self.filter(slack_messages, self.threshold);
         let slack_messages = self.reverse(&mut slack_messages);
         Ok(slack_messages.clone())
@@ -191,10 +192,42 @@ mod test {
     }
 
     #[test]
+    fn slack_api_extract() {
+        // Mock server
+        let mut server = mockito::Server::new();
+        let mock_url = format!("{}{}", server.url(), PATH);
+        server
+            .mock("POST", PATH)
+            .with_status(200)
+            .with_header("Authorization", format!("Bearer {}", TOKEN.clone()).as_str())
+            .with_header("content-type", "application/json")
+            .with_body(r#"{
+                "ok": true,
+                "messages": [
+                    {
+                        "text": "text1",
+                        "ts": "1589788800.000001"
+                    }
+                ]
+            }"#)
+            .create();
+
+        let mut slack_client = SlackAPIClient::new(SlackAPIParams {
+            base_url: SLACK_BASE_URL.to_string(),
+            method: SLACK_API_METHOD.to_string(),
+            channel: CHANNEL_ID.to_string(),
+            token: TOKEN.to_string(),
+        });
+        slack_client.slack_url = mock_url;
+        let actual = slack_client.extract().unwrap();
+        let expected = vec![];
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
     fn slack_api_build_slack_url() {
         let params = SlackAPIParams::new(CHANNEL_ID.to_string(), TOKEN.to_string());
-        let slack_client = SlackAPIClient::new(params);
-        let slack_url = slack_client.build_slack_url();
+        let slack_url = SlackAPIClient::build_slack_url(&params);
         assert_eq!(
             slack_url,
             format!(
@@ -208,7 +241,7 @@ mod test {
     fn slack_api_get_conversations_history() {
         // Mock server
         let mut server = mockito::Server::new();
-        let url = format!("{}{}", server.url(), PATH);
+        let mock_url = format!("{}{}", server.url(), PATH);
         server
             .mock("POST", PATH)
             .with_status(200)
@@ -231,7 +264,7 @@ mod test {
             channel: CHANNEL_ID.to_string(),
             token: TOKEN.to_string(),
         });
-        let actual = slack_client.get_conversations_history(url).unwrap();
+        let actual = slack_client.get_conversations_history(mock_url).unwrap();
         let expected = vec![
             SlackMessage {
                 text: "text1".to_string(),
@@ -245,7 +278,7 @@ mod test {
     fn slack_api_post() {
         // Mock server
         let mut server = mockito::Server::new();
-        let url = format!("{}{}", server.url(), PATH);
+        let mock_url = format!("{}{}", server.url(), PATH);
         server
             .mock("POST", PATH)
             .with_status(200)
@@ -263,7 +296,7 @@ mod test {
             channel: CHANNEL_ID.to_string(),
             token: TOKEN.to_string(),
         });
-        let res = slack_client.post(url);
+        let res = slack_client.post(mock_url);
         let res = match res {
             Ok(res) => slack_client.json(res),
             Err(e) => panic!("failed to post: {:?}", e),
