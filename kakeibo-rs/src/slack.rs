@@ -191,6 +191,57 @@ mod test {
     }
 
     #[test]
+    fn slack_api_build_slack_url() {
+        let params = SlackAPIParams::new(CHANNEL_ID.to_string(), TOKEN.to_string());
+        let slack_client = SlackAPIClient::new(params);
+        let slack_url = slack_client.build_slack_url();
+        assert_eq!(
+            slack_url,
+            format!(
+                "{}/{}?channel={}",
+                SLACK_BASE_URL, SLACK_API_METHOD, CHANNEL_ID
+            )
+        );
+    }
+
+    #[test]
+    fn slack_api_get_conversations_history() {
+        // Mock server
+        let mut server = mockito::Server::new();
+        let url = format!("{}{}", server.url(), PATH);
+        server
+            .mock("POST", PATH)
+            .with_status(200)
+            .with_header("Authorization", format!("Bearer {}", TOKEN.clone()).as_str())
+            .with_header("content-type", "application/json")
+            .with_body(r#"{
+                "ok": true,
+                "messages": [
+                    {
+                        "text": "text1",
+                        "ts": "1589788800.000001"
+                    }
+                ]
+            }"#)
+            .create();
+
+        let slack_client = SlackAPIClient::new(SlackAPIParams {
+            base_url: SLACK_BASE_URL.to_string(),
+            method: SLACK_API_METHOD.to_string(),
+            channel: CHANNEL_ID.to_string(),
+            token: TOKEN.to_string(),
+        });
+        let actual = slack_client.get_conversations_history(url).unwrap();
+        let expected = vec![
+            SlackMessage {
+                text: "text1".to_string(),
+                timestamp: 1589788800.000001,
+            },
+        ];
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
     fn slack_api_post() {
         // Mock server
         let mut server = mockito::Server::new();
